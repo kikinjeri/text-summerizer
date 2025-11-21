@@ -1,85 +1,119 @@
-// ===== Escape HTML =====
-function escapeHtml(str){
-  if(!str) return '';
-  return str.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+// ---------- Dark / Light mode ----------
+document.getElementById("theme-toggle").addEventListener("click", () => {
+  document.body.classList.toggle("dark");
+  document.body.classList.toggle("light");
+});
+
+// ---------- Fallback Summary ----------
+function generateFallbackSummary(text) {
+  if (!text || text.length < 20) {
+    return "A brief update was provided, but the full article text was unavailable.";
+  }
+
+  text = text.replace(/<[^>]+>/g, "").replace(/\s+/g, " ");
+
+  const sentences = text
+    .split(/(?<=[.!?])\s+/)
+    .filter(s => s.length > 25);
+
+  if (sentences.length === 0) {
+    return "A brief update was provided, but the full article text was unavailable.";
+  }
+
+  let summary = [];
+  summary.push(sentences[0]);
+  summary.push(sentences[1] || sentences[0]);
+  summary.push(sentences[2] || sentences[0]);
+  summary.push(sentences[sentences.length - 2] || sentences[0]);
+  summary.push(sentences[sentences.length - 1] || sentences[0]);
+
+  return summary.slice(0, 6).join(" ");
 }
 
-// ===== Load category =====
-export async function loadCategory(category){
-  const main = document.getElementById('summaries');
-  main.innerHTML = `<p>Loading ${category} articles...</p>`;
-  try{
-    const res = await fetch(`/api/${category}`);
-    if(!res.ok) throw new Error(`HTTP error ${res.status}`);
+// ---------- Load Category ----------
+async function loadCategory(cat) {
+  const container = document.getElementById("summaries");
+  container.innerHTML = "<p>Loading...</p>";
+
+  try {
+    const res = await fetch(`/api/${cat}`);
     const data = await res.json();
-    if(!data.length){ main.innerHTML = `<p>No articles found for ${category}.</p>`; return; }
-    main.innerHTML = '';
-    const lang = document.getElementById('lang').value || 'en';
-
-    data.forEach(article=>{
-      const card = document.createElement('article');
-      card.className = 'card';
-      const imageHTML = article.urlToImage ? `<img src="${article.urlToImage}" alt="Article image">` : '';
-
-      // Short description (2–3 lines)
-      let shortDesc = article.summary || '';
-      if(shortDesc.length > 200) shortDesc = shortDesc.slice(0,197) + '...';
-
-      card.innerHTML = `
-        ${imageHTML}
-        <h2><a href="${article.url}" target="_blank">${escapeHtml(article.title)}</a></h2>
-        <div class="summary-wrapper">
-          <p class="summary">${escapeHtml(shortDesc)}</p>
-          <div class="spinner"></div>
-        </div>
-        <a href="${article.url}" target="_blank" class="read-more">Read full article</a>
-        <div>
-          <span class="source-badge">${escapeHtml(article.source)}</span>
-          <small>${new Date(article.publishedAt).toLocaleDateString()}</small>
-        </div>
-      `;
-      main.appendChild(card);
-
-      // AI summary + translation (5–6 sentences)
-      fetch(`/api/summarize?url=${encodeURIComponent(article.url)}&title=${encodeURIComponent(article.title)}&content=${encodeURIComponent(article.summary)}&lang=${lang}`)
-        .then(r => r.json())
-        .then(ai => {
-          if(ai.summary && ai.summary.trim().length > 0){
-            const p = card.querySelector('.summary');
-            p.textContent = ai.summary; // Full AI summary
-            const spinner = card.querySelector('.spinner'); 
-            if(spinner) spinner.remove();
-          }
-        })
-        .catch(err => { 
-          console.error("AI summary failed:", err); 
-          const spinner = card.querySelector('.spinner'); 
-          if(spinner) spinner.remove(); 
-        });
-    });
-  } catch(err){ console.error(err); main.innerHTML = `<p>Error loading ${category}: ${err.message}</p>`; }
+    renderArticles(data);
+  } catch (err) {
+    console.error(err);
+    container.innerHTML = "<p>Failed to load articles.</p>";
+  }
 }
 
-// ===== Dark/Light Toggle =====
-const toggleBtn = document.getElementById('theme-toggle');
-const savedTheme = localStorage.getItem('theme');
-if(savedTheme) document.body.className = savedTheme;
-function updateToggleIcon(){ toggleBtn.textContent = document.body.classList.contains('dark') ? '☀️' : '🌙'; }
-updateToggleIcon();
-toggleBtn.addEventListener('click', ()=>{
-  document.body.classList.toggle('dark'); 
-  document.body.classList.toggle('light');
-  const theme = document.body.classList.contains('dark') ? 'dark' : 'light';
-  localStorage.setItem('theme', theme);
-  updateToggleIcon();
-});
-
-// ===== Language selector reload =====
-document.getElementById('lang').addEventListener('change', ()=>{
-  const currentCategory = document.querySelector('nav button.active')?.textContent.toLowerCase() || 'news';
-  loadCategory(currentCategory);
-});
-
-// ===== Default category =====
-window.addEventListener('DOMContentLoaded', ()=>{ loadCategory('news'); });
+// Make it global so HTML buttons can call it
 window.loadCategory = loadCategory;
+
+// ---------- Render Articles ----------
+function renderArticles(articles) {
+  const container = document.getElementById("summaries");
+  container.innerHTML = "";
+
+  if (!articles.length) {
+    container.innerHTML = "<p>No articles available.</p>";
+    return;
+  }
+
+  articles.forEach(article => {
+    const card = document.createElement("div");
+    card.className = "article-card";
+
+    const summaryBox = document.createElement("div");
+    summaryBox.className = "summary-box";
+
+    card.innerHTML = `
+      <h3>${article.title}</h3>
+      <p class="article-details">${article.summary || ""}</p>
+      <button class="summary-btn">Show Summary</button>
+    `;
+
+    card.appendChild(summaryBox);
+    container.appendChild(card);
+
+    const btn = card.querySelector(".summary-btn");
+    btn.addEventListener("click", () => {
+      showSummary(article, summaryBox);
+    });
+
+    article.raw = `${article.title}. ${article.summary}`;
+  });
+}
+
+// ---------- Show Summary ----------
+async function showSummary(article, box) {
+  box.innerHTML = `<div class="loading">Loading summary...</div>`;
+
+  const lang = document.getElementById("lang").value || "fr";
+
+  try {
+    const res = await fetch(
+      `/api/summarize?title=${encodeURIComponent(article.title)}&content=${encodeURIComponent(article.raw)}&lang=${lang}`
+    );
+
+    const data = await res.json();
+    let summary = data.summary;
+
+    if (!summary || summary.trim().length < 20) {
+      summary = generateFallbackSummary(article.raw);
+    }
+
+    box.innerHTML = `
+      <div class="summary-card">
+        <p>${summary}</p>
+      </div>
+    `;
+  } catch (err) {
+    console.error(err);
+    const summary = generateFallbackSummary(article.raw);
+
+    box.innerHTML = `
+      <div class="summary-card">
+        <p>${summary}</p>
+      </div>
+    `;
+  }
+}

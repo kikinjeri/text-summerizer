@@ -10,82 +10,91 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-app.use(express.static(path.join(__dirname,"public")));
+app.use(express.static(path.join(__dirname, "public")));
 
-// Caching
+// ---------- Cache ----------
 const cache = {};
-const CACHE_DURATION = 5 * 60 * 1000;
-function getCached(key){ const c = cache[key]; if(c && Date.now()-c.timestamp<CACHE_DURATION) return c.data; return null; }
-function setCache(key, data){ cache[key] = { timestamp: Date.now(), data }; }
+const TTL = 5 * 60 * 1000;
+function getCache(k) {
+  const item = cache[k];
+  if (item && Date.now() - item.time < TTL) return item.data;
+  return null;
+}
+function setCache(k, data) {
+  cache[k] = { time: Date.now(), data };
+}
 
-// NewsAPI categories
-const validCategories = ["general","business","entertainment","health","science","sports","technology"];
-const langMap = {
-  en: "English",
-  fr: "French",
-  es: "Spanish",
-  sw: "Swahili",
-  ar: "Arabic",
-  "zh-CN": "Mandarin Chinese",
-  "zh-HK": "Cantonese Chinese"
-};
+// ---------- News API ----------
+app.get("/api/:category", async (req, res) => {
+  const category = req.params.category.toLowerCase();
+  const key = "news-" + category;
 
-// ===== Routes =====
-app.get("/", (req,res)=>res.sendFile(path.join(__dirname,"public","index.html")));
+  const cached = getCache(key);
+  if (cached) return res.json(cached);
 
-app.get("/api/:category", async(req,res)=>{
-  const category = req.params.category;
-  const cached = getCached(category);
-  if(cached) return res.json(cached);
-
-  try{
+  try {
     const NEWS_API_KEY = process.env.NEWS_API_KEY;
-    let apiCategory = category.toLowerCase(); 
-    if(apiCategory === "news") apiCategory = "general";
-    if(!validCategories.includes(apiCategory)) apiCategory = "general";
-    
-    const url = `https://newsapi.org/v2/top-headlines?category=${apiCategory}&pageSize=5&apiKey=${NEWS_API_KEY}&language=en`;
-    const response = await fetch(url); 
-    const data = await response.json();
-    const summaries = (data.articles||[]).map(a=>({
+
+    let mapped = category;
+    if (mapped === "news") mapped = "general";
+
+    const url = `https://newsapi.org/v2/top-headlines?category=${mapped}&pageSize=6&language=en&apiKey=${NEWS_API_KEY}`;
+
+    const r = await fetch(url);
+    const d = await r.json();
+
+    const formatted = (d.articles || []).map(a => ({
       title: a.title,
       summary: a.description || a.content || "",
+      raw: (a.title || "") + ". " + (a.description || a.content || ""),
       url: a.url,
-      source: a.source.name,
-      urlToImage: a.urlToImage,
+      source: a.source?.name,
       publishedAt: a.publishedAt
     }));
-    setCache(category, summaries);
-    res.json(summaries);
-  }catch(err){ console.error(err); res.status(500).json({ error:"Failed to fetch articles" }); }
-});
 
-// AI summarize + translate
-app.get("/api/summarize", async(req,res)=>{
-  const { title, content, lang } = req.query;
-  const key = `${title}-${lang}`;
-  const cached = getCached(key); 
-  if(cached) return res.json({ summary: cached });
-
-  try{
-    const langName = langMap[lang] || "English";
-    const prompt = `Summarize this article in 4-5 sentences in ${langName}:\nTitle: ${title}\nContent: ${content}`;
-
-    const aiResponse = await openai.chat.completions.create({
-      model: "gpt-5-mini",
-      messages: [{ role:"user", content: prompt }],
-      temperature: 0.7
-    });
-    const summary = aiResponse.choices[0].message.content;
-    setCache(key, summary);
-    res.json({ summary });
-  }catch(err){
+    setCache(key, formatted);
+    res.json(formatted);
+  } catch (err) {
     console.error(err);
-    res.status(500).json({ summary: content });
+    res.json([]);
   }
 });
 
-app.listen(PORT, ()=>console.log(`Server running on http://localhost:${PORT}`));
+// ---------- AI Summary ----------
+app.get("/api/summarize", async (req, res) => {
+  const { title, content, lang } = req.query;
+  const key = `${title}-${lang}`;
+
+  const cached = getCache(key);
+  if (cached) return res.json({ summary: cached });
+
+  try {
+    const prompt = `
+Summarize the following news article in 5-6 sentences in ${lang === "fr" ? "French" : "English"}.
+Article:
+${content}
+    `;
+
+    const ai = await openai.chat.completions.create({
+      model: "gpt-5-mini",
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.7
+    });
+
+    const summary = ai.choices[0].message.content;
+    setCache(key, summary);
+
+    res.json({ summary });
+  } catch (err) {
+    console.error("AI FAILED:", err);
+    res.json({ summary: "" });
+  }
+});
+
+app.listen(PORT, () =>
+  console.log("Server running at http://localhost:" + PORT)
+);
