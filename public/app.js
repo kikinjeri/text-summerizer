@@ -68,6 +68,7 @@ function renderArticles(articles) {
     card.innerHTML = `
       <h3>${article.title}</h3>
       <p class="article-details">${article.summary || ""}</p>
+      <a href="${article.url}" target="_blank" class="full-article-link">Read Full Article</a>
       <button class="summary-btn">Show Summary</button>
     `;
 
@@ -117,3 +118,8 @@ async function showSummary(article, box) {
     `;
   }
 }
+
+// ---------- Load first category on page load ----------
+document.addEventListener("DOMContentLoaded", () => {
+  loadCategory("news");
+});
