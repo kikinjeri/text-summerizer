@@ -1,0 +1,97 @@
+1. Core Functionality
+
+The app is running with Node.js + Express backend and modern frontend.
+
+NewsAPI integration provides initial article data for categories:
+
+News
+
+Sports
+
+Entertainment
+
+Technology
+
+Users can click a category button to load 5 latest articles per section.
+
+Each article card includes:
+
+Optional image
+
+Title with link
+
+Initial NewsAPI summary
+
+“Read full article” link
+
+Source badge and published date
+
+2. AI Summarization
+
+AI summaries (4–5 sentences) are fetched asynchronously for each article.
+
+While AI summary is loading:
+
+A spinner appears inside the card.
+
+Once AI summary arrives, it replaces the initial NewsAPI description and spinner disappears.
+
+If API rate limits are reached:
+
+NewsAPI summaries still display immediately.
+
+AI summaries will populate when quota refreshes.
+
+3. UI / UX Enhancements
+
+Modern card design with rounded corners, shadows, and hover effects.
+
+Soft blue button color for readability.
+
+Responsive design for mobile and desktop.
+
+Dark/light mode toggle:
+
+Floating sun/moon icon at the top-right.
+
+Applies site-wide, saved in localStorage.
+
+Optional images display above summaries.
+
+Smooth transitions between light and dark themes.
+
+4. Translation (planned)
+
+We discussed adding a language dropdown for English, French, Spanish, Swahili, Arabic, Mandarin, Cantonese.
+
+Currently not active, but architecture allows:
+
+Summarization in a selected language
+
+Translation of existing summaries
+
+Caching per language to maintain speed
+
+5. Remaining Enhancements
+
+Fully integrate AI summary translations if desired.
+
+Add optional subtle animations for spinner fade-in/fade-out.
+
+Improve marketable polish, e.g., favicon, logo, hover effects for cards/images.
+
+Possibly pre-fetch summaries for smoother experience.
+
+✅ Current state:
+
+Functional, modern, marketable news summarizer app.
+
+Users can select categories, read summaries, click full articles.
+
+Dark/light mode works globally.
+
+AI summaries load asynchronously with spinner.
+
+If you want, the next step could be adding translation and caching or polishing UI/animations for a fully market-ready product.
+
+Do you want me to focus on translation next or UI polish/animations?
